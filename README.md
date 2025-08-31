@@ -93,20 +93,68 @@ This application consists of a FastAPI backend and a React frontend.
 
 ### Running the Application
 
-You need to start both the backend and frontend servers:
+#### Option 1: Start Both Servers Together (Recommended)
+```bash
+npm run dev:full
+```
+This runs both frontend and backend concurrently in one terminal.
 
-1. **Start the Backend Server:**
-   ```bash
-   cd backend
-   python start.py
-   ```
-   The backend will run on `http://localhost:8000`
+#### Option 2: Start Servers Separately
 
-2. **Start the Frontend Server (in a new terminal):**
-   ```bash
-   npm run dev
-   ```
-   The frontend will run on `http://localhost:5173`
+**Terminal 1 - Backend:**
+```bash
+cd backend
+python start.py
+```
+Backend runs on: `http://localhost:8000`
+
+**Terminal 2 - Frontend:**
+```bash
+npm run dev
+```  
+Frontend runs on: `http://localhost:5173`
+
+#### Option 3: Backend Only (for API testing)
+```bash
+cd backend
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Stopping the Application
+
+#### If using `npm run dev:full`:
+- Press `Ctrl+C` in the terminal (stops both servers)
+
+#### If running servers separately:
+- Press `Ctrl+C` in each terminal window
+
+#### Force Stop (if processes are stuck):
+
+**Windows:**
+```bash
+# Find and kill backend (port 8000)
+netstat -ano | findstr :8000
+taskkill //PID <process_id> //F
+
+# Find and kill frontend (port 5173)  
+netstat -ano | findstr :5173
+taskkill //PID <process_id> //F
+```
+
+**Mac/Linux:**
+```bash
+# Kill backend
+lsof -ti:8000 | xargs kill -9
+
+# Kill frontend
+lsof -ti:5173 | xargs kill -9
+```
+
+### Access Points
+
+- **Frontend App**: `http://localhost:5173`
+- **Backend API**: `http://localhost:8000`
+- **API Documentation**: `http://localhost:8000/docs`
 
 ### Build for Production
 
@@ -124,9 +172,27 @@ When the backend is running, you can view the interactive API documentation at:
 ### Troubleshooting
 
 **Port conflicts:**
-- Backend (8000): Find process with `netstat -ano | findstr :8000`, kill with `taskkill //PID <process_id> //F`
-- Frontend (5173): Find process with `netstat -ano | findstr :5173`, kill with `taskkill //PID <process_id> //F`
+- Use the "Force Stop" commands above to kill stuck processes
+- Or restart your terminal/computer if processes persist
 
 **Database issues:**
-- The SQLite database file will be created automatically in the backend directory
-- To reset the database, simply delete `idea_factory.db` and restart the backend
+- The SQLite database file (`idea_factory.db`) will be created automatically in the backend directory
+- To reset the database, simply delete `backend/idea_factory.db` and restart the backend
+
+**API Key issues:**
+- Make sure your `backend/.env` file contains: `GEMINI_API_KEY=your_actual_api_key`
+- Get your API key from [Google AI Studio](https://aistudio.google.com/)
+- Restart the backend after updating the API key
+
+**Common startup issues:**
+- Make sure you've run `npm install` and `pip install -r requirements.txt`
+- Check that Python 3.8+ and Node.js 18+ are installed
+- Verify no other applications are using ports 8000 or 5173
+
+### Quick Start Checklist
+
+1. ✅ **Install Node.js dependencies**: `npm install`
+2. ✅ **Install Python dependencies**: `cd backend && pip install -r requirements.txt`  
+3. ✅ **Setup environment**: Create `backend/.env` with your Gemini API key
+4. ✅ **Start application**: `npm run dev:full`
+5. ✅ **Open browser**: Navigate to `http://localhost:5173`

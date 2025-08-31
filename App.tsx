@@ -8,21 +8,9 @@ import { Settings } from './components/Settings';
 import { Button } from './components/ui/Button';
 import { ClusterConfigPanel } from './components/ClusterConfigPanel';
 import { SingleClusterSuggestionModal } from './components/SingleClusterSuggestionModal';
-import useLocalStorage from './hooks/useLocalStorage';
-
-const sampleIdeas: Idea[] = [
-    { id: '1', title: 'AI-Powered Personal Gardener', description: 'A small robot that tends to your indoor plants, monitoring soil moisture, sunlight, and providing water. It uses machine learning to identify plant species and their specific needs.', status: IdeaStatus.PUBLISHED, votes: 12, isEvaluating: false },
-    { id: '2', title: 'Augmented Reality Board Games', description: 'Classic board games like Chess or Settlers of Catan brought to life with AR. Pieces animate, and special effects appear on the board when viewed through a smartphone.', status: IdeaStatus.PUBLISHED, votes: 25, isEvaluating: false },
-    { id: '3', title: 'Subscription Box for Global Snacks', description: 'A monthly delivery service that curates and sends a collection of unique snacks and candies from a different country each month.', status: IdeaStatus.DRAFT, votes: 0, isEvaluating: false },
-    { id: '4', title: 'Smart Bike Lock with GPS Tracking', description: 'A bike lock that not only secures your bike but also tracks its location in real-time and sends an alert to your phone if it\'s tampered with.', status: IdeaStatus.PUBLISHED, votes: 8, isEvaluating: false },
-    { id: '5', title: 'Virtual Reality Language Immersion', description: 'Learn a new language by "visiting" a virtual city where you can interact with AI-powered characters and practice conversation in realistic scenarios.', status: IdeaStatus.DRAFT, votes: 0, isEvaluating: false },
-];
-
-const defaultCriteria: EvaluationCriteria = {
-    desirability: 'Does this idea solve a real, significant problem for a clear target audience? Is it something people would genuinely want or need?',
-    feasibility: 'Can this idea be built with current technology within a reasonable timeframe and budget? What are the primary technical hurdles?',
-    viability: 'Is there a clear path to creating a sustainable business around this idea? How would it generate revenue, and what is the potential market size?',
-};
+import { useApiIdeas, useApiEvaluationCriteria } from './hooks/useApiData';
+import { apiService } from './api';
+import { convertApiIdeaToIdea } from './utils/apiConverter';
 
 type SortableIdeaKeys = keyof Pick<Idea, 'title' | 'status' | 'votes' | 'clusterName'>;
 type SortableKeys = SortableIdeaKeys | 'ai_score';
@@ -30,8 +18,8 @@ type SortableKeys = SortableIdeaKeys | 'ai_score';
 const ITEMS_PER_PAGE = 10;
 
 const App: React.FC = () => {
-  const [ideas, setIdeas] = useLocalStorage<Idea[]>('ideas', sampleIdeas);
-  const [evaluationCriteria, setEvaluationCriteria] = useLocalStorage<EvaluationCriteria>('evaluationCriteria', defaultCriteria);
+  const { ideas, setIdeas, loading: ideasLoading, error: ideasError, createIdea, updateIdea, voteIdea, publishIdea } = useApiIdeas();
+  const { criteria: evaluationCriteria, loading: criteriaLoading, error: criteriaError, saveCriteria } = useApiEvaluationCriteria();
   
   const [currentView, setCurrentView] = useState<'list' | 'detail' | 'dashboard' | 'settings'>('dashboard');
   const [selectedIdeaId, setSelectedIdeaId] = useState<string | null>(null);
@@ -50,6 +38,12 @@ const App: React.FC = () => {
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Combine errors from different sources
+  useEffect(() => {
+    const combinedError = ideasError || criteriaError;
+    setError(combinedError);
+  }, [ideasError, criteriaError]);
+
   const handleSelectIdea = (id: string) => {
     setSelectedIdeaId(id);
     setCurrentView('detail');
@@ -83,31 +77,37 @@ const App: React.FC = () => {
     setIsEvaluationMode(false);
   };
 
-  const handleSaveIdea = (ideaData: Omit<Idea, 'id' | 'status' | 'votes' | 'evaluation' | 'isEvaluating' | 'isClassifying' | 'clusterName'>) => {
-    if (selectedIdeaId) {
-      setIdeas(prevIdeas => prevIdeas.map(idea => idea.id === selectedIdeaId ? { ...idea, ...ideaData } : idea));
-      setCurrentView('detail');
-    } else {
-      const newIdea: Idea = {
-        ...ideaData,
-        id: new Date().toISOString(),
-        status: IdeaStatus.DRAFT,
-        votes: 0,
-      };
-      setIdeas(prevIdeas => [...prevIdeas, newIdea]);
-      setSelectedIdeaId(newIdea.id);
-      setCurrentView('detail');
+  const handleSaveIdea = async (ideaData: Omit<Idea, 'id' | 'status' | 'votes' | 'evaluation' | 'isEvaluating' | 'isClassifying' | 'clusterName'>) => {
+    try {
+      if (selectedIdeaId) {
+        await updateIdea(selectedIdeaId, ideaData);
+        setCurrentView('detail');
+      } else {
+        const newIdea = await createIdea(ideaData);
+        setSelectedIdeaId(newIdea.id);
+        setCurrentView('detail');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save idea');
     }
   };
 
-  const handlePublishIdea = () => {
+  const handlePublishIdea = async () => {
     if (!selectedIdeaId) return;
-    setIdeas(prevIdeas => prevIdeas.map(idea => idea.id === selectedIdeaId ? { ...idea, status: IdeaStatus.PUBLISHED } : idea));
+    try {
+      await publishIdea(selectedIdeaId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to publish idea');
+    }
   };
 
-  const handleVote = () => {
+  const handleVote = async () => {
     if (!selectedIdeaId) return;
-    setIdeas(prevIdeas => prevIdeas.map(idea => idea.id === selectedIdeaId ? { ...idea, votes: idea.votes + 1 } : idea));
+    try {
+      await voteIdea(selectedIdeaId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to vote');
+    }
   };
 
   const handleToggleEvaluationMode = () => {
@@ -123,92 +123,26 @@ const App: React.FC = () => {
   const handleStartEvaluation = async () => {
     if (selectedForEvaluation.length === 0) return;
     
-    setIdeas(prevIdeas => prevIdeas.map(idea => selectedForEvaluation.includes(idea.id) ? { ...idea, isEvaluating: true } : idea));
+    // Set ideas as evaluating locally for immediate UI feedback
+    setIdeas(prevIdeas => prevIdeas.map(idea => 
+      selectedForEvaluation.includes(idea.id) ? { ...idea, isEvaluating: true } : idea
+    ));
     setIsEvaluationMode(false);
     
     try {
-      const { GoogleGenAI, Type } = await import('@google/genai');
-
-      const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          summary: { type: Type.STRING, description: 'A brief, one-paragraph summary of the AI\'s overall impression of the idea.' },
-          desirability: {
-            type: Type.OBJECT,
-            properties: {
-              score: { type: Type.NUMBER, description: 'A score from 1 to 10.' },
-              reasoning: { type: Type.STRING, description: 'Detailed reasoning for the score, based on the provided criteria.' },
-            },
-          },
-          feasibility: {
-            type: Type.OBJECT,
-            properties: {
-              score: { type: Type.NUMBER, description: 'A score from 1 to 10.' },
-              reasoning: { type: Type.STRING, description: 'Detailed reasoning for the score, based on the provided criteria.' },
-            },
-          },
-          viability: {
-            type: Type.OBJECT,
-            properties: {
-              score: { type: Type.NUMBER, description: 'A score from 1 to 10.' },
-              reasoning: { type: Type.STRING, description: 'Detailed reasoning for the score, based on the provided criteria.' },
-            },
-          },
-        },
-      };
-
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
-      const evaluationPromises = selectedForEvaluation.map(async (ideaId) => {
-        const ideaToEvaluate = ideas.find(i => i.id === ideaId);
-        if (!ideaToEvaluate) return;
-
-        const prompt = `
-          Please evaluate the following business/product idea based on the provided criteria.
-          
-          Idea Title: "${ideaToEvaluate.title}"
-          Idea Description: "${ideaToEvaluate.description}"
-
-          Evaluation Criteria:
-          1. Desirability: ${evaluationCriteria.desirability}
-          2. Feasibility: ${evaluationCriteria.feasibility}
-          3. Viability: ${evaluationCriteria.viability}
-
-          Provide a score from 1-10 for each criterion, with 1 being the lowest and 10 being the highest.
-          Also provide detailed reasoning for each score.
-          Return the entire response as a JSON object that conforms to the specified schema.
-        `;
-
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema,
-          },
-        });
-        
-        const evaluationResult = JSON.parse(response.text) as IdeaEvaluation;
-        
-        setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, evaluation: evaluationResult, isEvaluating: false } : i));
-      });
-
-      await Promise.all(evaluationPromises);
-
-    } catch (e: any) {
-      setError(`Error calling Gemini API: ${e.message}`);
-      setIdeas(prevIdeas => prevIdeas.map(idea => selectedForEvaluation.includes(idea.id) ? { ...idea, isEvaluating: false } : idea));
+      await apiService.evaluateIdeas(selectedForEvaluation);
+      // Refresh ideas to get updated evaluation data
+      const updatedIdeas = await apiService.getIdeas();
+      setIdeas(updatedIdeas.map(convertApiIdeaToIdea));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to evaluate ideas');
+      // Reset evaluating status on error
+      setIdeas(prevIdeas => prevIdeas.map(idea => 
+        selectedForEvaluation.includes(idea.id) ? { ...idea, isEvaluating: false } : idea
+      ));
     } finally {
-        setSelectedForEvaluation([]);
+      setSelectedForEvaluation([]);
     }
-  };
-
-  const escapeCsvField = (field: string | number): string => {
-    const stringField = String(field);
-    if (/[",\n]/.test(stringField)) {
-        return `"${stringField.replace(/"/g, '""')}"`;
-    }
-    return stringField;
   };
 
   const handleDownloadIdeas = () => {
@@ -253,7 +187,15 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-   const handleDownloadTemplate = () => {
+  const escapeCsvField = (field: string | number): string => {
+    const stringField = String(field);
+    if (/[",\n]/.test(stringField)) {
+        return `"${stringField.replace(/"/g, '""')}"`;
+    }
+    return stringField;
+  };
+
+  const handleDownloadTemplate = () => {
     const headers = ['title', 'description'];
     const exampleRow = [
       '"Your Brilliant Idea Title"',
@@ -280,113 +222,21 @@ const App: React.FC = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result;
-        if (typeof text !== 'string') throw new Error("File content is not readable.");
-        
-        let uploadedIdeas: { title: string; description: string }[];
-
-        if (file.name.endsWith('.csv')) {
-            const lines = text.trim().split(/\r?\n/);
-            if (lines.length < 2) throw new Error("CSV file must have a header and at least one data row.");
-            
-            const parseCsvLine = (line: string): string[] => {
-                const result: string[] = [];
-                let currentField = '';
-                let inQuotedField = false;
-                for (let i = 0; i < line.length; i++) {
-                    const char = line[i];
-                    if (inQuotedField) {
-                        if (char === '"') {
-                            if (i + 1 < line.length && line[i + 1] === '"') {
-                                currentField += '"';
-                                i++;
-                            } else {
-                                inQuotedField = false;
-                            }
-                        } else {
-                            currentField += char;
-                        }
-                    } else {
-                        if (char === '"') {
-                            inQuotedField = true;
-                        } else if (char === ',') {
-                            result.push(currentField);
-                            currentField = '';
-                        } else {
-                            currentField += char;
-                        }
-                    }
-                }
-                result.push(currentField);
-                return result;
-            };
-
-            const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
-            const titleIndex = headers.indexOf('title');
-            const descriptionIndex = headers.indexOf('description');
-
-            if (titleIndex === -1 || descriptionIndex === -1) {
-                throw new Error("CSV file must contain 'title' and 'description' columns.");
-            }
-            
-            uploadedIdeas = lines.slice(1).map(line => {
-                const values = parseCsvLine(line);
-                return {
-                    title: values[titleIndex] || '',
-                    description: values[descriptionIndex] || '',
-                };
-            });
-
-        } else if (file.name.endsWith('.json')) {
-            const parsedJson = JSON.parse(text);
-            if (!Array.isArray(parsedJson)) throw new Error("JSON file must contain an array of ideas.");
-            uploadedIdeas = parsedJson;
-        } else {
-            throw new Error("Unsupported file type. Please upload a .json or .csv file.");
-        }
-
-        const newIdeas: Idea[] = uploadedIdeas.map((item: any): Idea | null => {
-            if (typeof item.title !== 'string' || typeof item.description !== 'string' || !item.title || !item.description) {
-                console.warn("Skipping invalid item in uploaded file:", item);
-                return null;
-            }
-            return {
-                id: `${new Date().toISOString()}-${Math.random()}`,
-                title: item.title,
-                description: item.description,
-                status: IdeaStatus.DRAFT,
-                votes: 0,
-                isEvaluating: false,
-            };
-        }).filter((idea): idea is Idea => idea !== null);
-
-        if (newIdeas.length === 0 && uploadedIdeas.length > 0) {
-            throw new Error("No valid ideas found. Each idea must have a non-empty 'title' and 'description'.");
-        }
-        
-        if (newIdeas.length > 0) {
-          setIdeas(prev => [...prev, ...newIdeas]);
-          handleGoToList();
-        }
-        
-      } catch (err: any) {
-        setError(`Failed to upload ideas: ${err.message}`);
-      } finally {
-        if (event.target) event.target.value = '';
-      }
-    };
-    reader.onerror = () => {
-      setError("Failed to read the selected file.");
+    try {
+      await apiService.uploadIdeas(file);
+      // Refresh ideas list
+      const updatedIdeas = await apiService.getIdeas();
+      setIdeas(updatedIdeas.map(convertApiIdeaToIdea));
+      handleGoToList();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload ideas');
+    } finally {
       if (event.target) event.target.value = '';
-    };
-    reader.readAsText(file);
+    }
   };
   
   const getAvgScore = (idea: Idea): number | null => {
@@ -398,164 +248,70 @@ const App: React.FC = () => {
     setIsClustering(true);
     setIsClusterConfigOpen(false);
     setError(null);
+    
     try {
-      const { GoogleGenAI, Type } = await import('@google/genai');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-      const clusterSchema = {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            clusterName: { type: Type.STRING, description: 'A short, descriptive name for this cluster (e.g., "Sustainable Living Tech").' },
-            clusterDescription: { type: Type.STRING, description: 'A one-sentence summary of the common theme in this cluster.' },
-            ideaIds: { type: Type.ARRAY, items: { type: Type.STRING } },
-          },
-        },
-      };
-
-      const ideasToCluster = ideas.map(i => ({ id: i.id, title: i.title, description: i.description }));
-      const prompt = `
-        Analyze the following list of ideas and group them into ${config.numberOfClusters} distinct clusters.
-        The primary basis for clustering should be: "${config.clusteringBasis}".
-        
-        For each cluster, provide a descriptive name, a brief summary of the theme, and a list of the IDs of the ideas that belong to it.
-        Ensure every idea is assigned to exactly one cluster.
-
-        Here is the list of ideas in JSON format:
-        ${JSON.stringify(ideasToCluster, null, 2)}
-
-        Return the entire response as a JSON object that conforms to the specified schema.
-      `;
-      
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: clusterSchema,
-        },
-      });
-
-      const result = JSON.parse(response.text) as IdeaCluster[];
-      setClusterResults(result);
-
-    } catch (e: any) {
-      setError(`AI Clustering failed: ${e.message}`);
+      const clusters = await apiService.clusterIdeas(config);
+      setClusterResults(clusters);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cluster ideas');
     } finally {
       setIsClustering(false);
     }
   };
 
-  const handleSaveClusters = () => {
+  const handleSaveClusters = async () => {
     if (!clusterResults) return;
 
-    const ideaClusterMap = new Map<string, string>();
-    clusterResults.forEach(cluster => {
-      cluster.ideaIds.forEach(ideaId => {
-        ideaClusterMap.set(ideaId, cluster.clusterName);
-      });
-    });
-
-    setIdeas(prevIdeas =>
-      prevIdeas.map(idea => {
-        const clusterName = ideaClusterMap.get(idea.id);
-        if (clusterName) {
-          return { ...idea, clusterName };
-        }
-        return idea;
-      })
-    );
-    setClusterResults(null);
+    try {
+      await apiService.saveClusters(clusterResults);
+      // Refresh ideas to get updated cluster data
+      const updatedIdeas = await apiService.getIdeas();
+      setIdeas(updatedIdeas.map(convertApiIdeaToIdea));
+      setClusterResults(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save clusters');
+    }
   };
 
-  const handleClearAllSavedClusters = () => {
-    setIdeas(prevIdeas =>
-      prevIdeas.map(idea => {
-        const { clusterName, ...rest } = idea;
-        return rest as Idea;
-      })
-    );
+  const handleClearAllSavedClusters = async () => {
+    try {
+      await apiService.clearAllClusters();
+      // Refresh ideas to reflect cleared clusters
+      const updatedIdeas = await apiService.getIdeas();
+      setIdeas(updatedIdeas.map(convertApiIdeaToIdea));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear clusters');
+    }
   };
 
   const handleClassifySingleIdea = async (ideaId: string) => {
-    const ideaToClassify = ideas.find(i => i.id === ideaId);
-    if (!ideaToClassify) return;
-  
-    setIdeas(prev => prev.map(i => (i.id === ideaId ? { ...i, isClassifying: true } : i)));
-    setError(null);
-  
     try {
-      const { GoogleGenAI, Type } = await import('@google/genai');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-      const existingClusters = ideas.reduce((acc, idea) => {
-        if (idea.clusterName) {
-          if (!acc[idea.clusterName]) {
-            acc[idea.clusterName] = [];
-          }
-          acc[idea.clusterName].push(idea.title);
-        }
-        return acc;
-      }, {} as Record<string, string[]>);
-  
-      const clusterDescriptions = Object.entries(existingClusters)
-        .map(([name, titles]) => `- ${name}: (Includes ideas like: ${titles.slice(0, 2).join(', ')}, etc.)`)
-        .join('\n');
-  
-      const suggestionSchema = {
-        type: Type.OBJECT,
-        properties: {
-          reasoning: { type: Type.STRING, description: "A brief explanation for why the idea fits an existing cluster or needs a new one." },
-          suggestionType: { type: Type.STRING, enum: ['EXISTING_CLUSTER', 'NEW_CLUSTER'] },
-          clusterName: { type: Type.STRING, description: "The name of the suggested cluster. If it's a new cluster, provide a suitable new name." },
-        },
-      };
-  
-      const prompt = `
-        I have a new idea and I need to classify it into my existing organizational clusters.
-  
-        Here are my existing clusters and some example ideas within them:
-        ${clusterDescriptions}
-  
-        Here is the new idea to classify:
-        - Title: "${ideaToClassify.title}"
-        - Description: "${ideaToClassify.description}"
-  
-        Your task:
-        1. Analyze the new idea.
-        2. Decide if it fits well into one of the existing clusters.
-        3. If it doesn't fit, suggest a new, appropriate cluster name for it.
-        4. Provide a brief reasoning for your decision.
-  
-        Return your suggestion as a JSON object conforming to the specified schema.
-      `;
-  
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: suggestionSchema,
-        },
-      });
-  
-      const result = JSON.parse(response.text) as SingleClusterSuggestion;
-      setSingleClusterSuggestion(result);
+      // Set idea as classifying locally for immediate UI feedback
+      setIdeas(prev => prev.map(i => (i.id === ideaId ? { ...i, isClassifying: true } : i)));
+      
+      const suggestion = await apiService.classifySingleIdea(ideaId);
+      setSingleClusterSuggestion(suggestion);
       setIsSuggestionModalOpen(true);
-  
-    } catch (e: any) {
-      setError(`AI Classification failed: ${e.message}`);
-    } finally {
+      
+      // Reset classifying status
+      setIdeas(prev => prev.map(i => (i.id === ideaId ? { ...i, isClassifying: false } : i)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to classify idea');
       setIdeas(prev => prev.map(i => (i.id === ideaId ? { ...i, isClassifying: false } : i)));
     }
   };
   
-  const handleAcceptSuggestion = () => {
+  const handleAcceptSuggestion = async () => {
     if (!singleClusterSuggestion || !selectedIdeaId) return;
-    setIdeas(prev => prev.map(i => i.id === selectedIdeaId ? { ...i, clusterName: singleClusterSuggestion.clusterName } : i));
-    setIsSuggestionModalOpen(false);
-    setSingleClusterSuggestion(null);
+    
+    try {
+      const updatedIdea = await apiService.applyClassification(selectedIdeaId, singleClusterSuggestion);
+      setIdeas(prev => prev.map(i => i.id === selectedIdeaId ? convertApiIdeaToIdea(updatedIdea) : i));
+      setIsSuggestionModalOpen(false);
+      setSingleClusterSuggestion(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to apply classification');
+    }
   };
   
   const handleRejectSuggestion = () => {
@@ -658,7 +414,6 @@ const App: React.FC = () => {
     }
   }, [currentPage, totalPages]);
 
-
   const requestSort = (key: SortableKeys) => {
     let direction: 'ascending' | 'descending' = 'ascending';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -676,6 +431,12 @@ const App: React.FC = () => {
   const hasSavedClusters = useMemo(() => ideas.some(idea => !!idea.clusterName), [ideas]);
 
   const renderContent = () => {
+    if (ideasLoading || criteriaLoading) {
+      return <div className="flex justify-center items-center h-64">
+        <div className="text-lg">Loading...</div>
+      </div>;
+    }
+
     switch (currentView) {
       case 'dashboard':
         return <Dashboard ideas={ideas} onSelectIdea={handleSelectIdea} />;
@@ -731,7 +492,7 @@ const App: React.FC = () => {
         }
         return <p>Error: Idea not found.</p>;
       case 'settings':
-        return <Settings criteria={evaluationCriteria} onSaveCriteria={setEvaluationCriteria} />;
+        return <Settings criteria={evaluationCriteria} onSaveCriteria={saveCriteria} />;
       default:
         return null;
     }

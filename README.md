@@ -41,15 +41,18 @@ Welcome to Idea Factory, a powerful, AI-enhanced platform for capturing, managin
 ## 🛠️ Tech Stack
 
 - **Frontend:** React, TypeScript, Tailwind CSS
-- **AI Integration:** Google Gemini API (`@google/genai`)
-- **Data Persistence:** Browser Local Storage (self-contained, no backend needed)
+- **Backend:** FastAPI, Python
+- **Database:** SQLite
+- **AI Integration:** Google Gemini API (`google-generativeai`)
+- **Data Persistence:** SQLite database with persistent storage
 
 ## 🚀 Getting Started
 
-This is a fully client-side application that runs entirely in your browser.
+This application consists of a FastAPI backend and a React frontend.
 
 ### Prerequisites
 
+- **Python 3.8+**
 - **Node.js** (version 18 or higher)
 - **npm** (comes with Node.js)
 - A modern web browser (Chrome, Firefox, or Edge)
@@ -58,38 +61,72 @@ This is a fully client-side application that runs entirely in your browser.
 
 1. **Clone or download the project** to your local machine
 
-2. **Install dependencies:**
+2. **Backend Setup:**
    ```bash
+   # Navigate to backend directory
+   cd backend
+   
+   # Install Python dependencies
+   pip install -r requirements.txt
+   
+   # Create environment file
+   cp .env.example .env
+   
+   # Edit .env file and add your Gemini API key
+   GEMINI_API_KEY=your_gemini_api_key_here
+   DATABASE_URL=sqlite:///./idea_factory.db
+   ```
+
+3. **Frontend Setup:**
+   ```bash
+   # Navigate back to root directory
+   cd ..
+   
+   # Install Node.js dependencies
    npm install
    ```
 
-3. **Configure Gemini API Key:**
+4. **Configure Gemini API Key:**
    - Get a Gemini API Key from [Google AI Studio](https://aistudio.google.com/)
-   - Create a `.env.local` file in the project root
-   - Add your API key:
-     ```
-     VITE_API_KEY=your_gemini_api_key_here
-     ```
+   - Add your API key to `backend/.env` file (see step 2 above)
    - **IMPORTANT:** Never hardcode your API key directly in the source code
 
 ### Running the Application
 
-Start the development server:
-```bash
-npm run dev
-```
+You need to start both the backend and frontend servers:
 
-The application will open at `http://localhost:5173` in your browser.
+1. **Start the Backend Server:**
+   ```bash
+   cd backend
+   python start.py
+   ```
+   The backend will run on `http://localhost:8000`
+
+2. **Start the Frontend Server (in a new terminal):**
+   ```bash
+   npm run dev
+   ```
+   The frontend will run on `http://localhost:5173`
 
 ### Build for Production
 
-To create a production build:
+To create a production build of the frontend:
 ```bash
 npm run build
 ```
 
+### API Documentation
+
+When the backend is running, you can view the interactive API documentation at:
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
 ### Troubleshooting
 
-**Port 5173 is occupied:**
-- Find the process: `netstat -ano | findstr :5173`
-- Kill the process: `taskkill //PID <process_id> //F`
+**Port conflicts:**
+- Backend (8000): Find process with `netstat -ano | findstr :8000`, kill with `taskkill //PID <process_id> //F`
+- Frontend (5173): Find process with `netstat -ano | findstr :5173`, kill with `taskkill //PID <process_id> //F`
+
+**Database issues:**
+- The SQLite database file will be created automatically in the backend directory
+- To reset the database, simply delete `idea_factory.db` and restart the backend

@@ -50,25 +50,46 @@ This is a fully client-side application that runs entirely in your browser.
 
 ### Prerequisites
 
-You need a modern web browser (like Chrome, Firefox, or Edge).
+- **Node.js** (version 18 or higher)
+- **npm** (comes with Node.js)
+- A modern web browser (Chrome, Firefox, or Edge)
 
-### Configuration: Gemini API Key
+### Installation & Setup
 
-This application requires a Google Gemini API key to power its AI features. For security, the key is sourced from an environment variable.
+1. **Clone or download the project** to your local machine
 
-1.  **Get a Gemini API Key:** Visit [Google AI Studio](https://aistudio.google.com/) to create your API key.
-2.  **Set up the Environment Variable:** The application code looks for the key at `process.env.API_KEY`. You must configure the environment where you run this application to provide this variable.
-    - **For Local Development (Example with Vite):**
-      1.  Create a file named `.env.local` in the project's root directory.
-      2.  Add the following line to the file, replacing `YOUR_API_KEY` with your actual key:
-          ```
-          VITE_API_KEY=YOUR_API_KEY
-          ```
-      3.  You would then access this in the code via `import.meta.env.VITE_API_KEY`. (Note: The current code uses `process.env.API_KEY`, which is typical for environments like Create React App or Node.js. You may need to adjust the code or your setup to match).
-    - **For Deployment:** If you are deploying this to a hosting service (like Vercel, Netlify, etc.), use their "Secrets" or "Environment Variables" settings to add a variable named `API_KEY` with your key as the value.
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-**IMPORTANT:** Never hardcode your API key directly in the source code.
+3. **Configure Gemini API Key:**
+   - Get a Gemini API Key from [Google AI Studio](https://aistudio.google.com/)
+   - Create a `.env.local` file in the project root
+   - Add your API key:
+     ```
+     VITE_API_KEY=your_gemini_api_key_here
+     ```
+   - **IMPORTANT:** Never hardcode your API key directly in the source code
 
-### Running the App
+### Running the Application
 
-Once you have the files and have configured your environment, simply open the `index.html` file in your browser. All the necessary scripts are loaded from a CDN.
+Start the development server:
+```bash
+npm run dev
+```
+
+The application will open at `http://localhost:5173` in your browser.
+
+### Build for Production
+
+To create a production build:
+```bash
+npm run build
+```
+
+### Troubleshooting
+
+**Port 5173 is occupied:**
+- Find the process: `netstat -ano | findstr :5173`
+- Kill the process: `taskkill //PID <process_id> //F`

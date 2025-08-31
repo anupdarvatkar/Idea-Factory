@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Idea Factory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'brand-primary': '#4f46e5',
+              'brand-secondary': '#7c3aed',
+              'brand-accent': '#ec4899',
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.5s ease-in-out',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+            },
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "react/jsx-runtime": "https://aistudiocdn.com/react@^19.1.1/jsx-runtime",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.0.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

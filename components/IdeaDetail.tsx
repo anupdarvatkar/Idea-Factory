@@ -14,6 +14,7 @@ interface IdeaDetailProps {
   hasSavedClusters: boolean;
   onClassify: (ideaId: string) => void;
   onGoToList: () => void;
+  onDelete?: (ideaId: string) => void;
 }
 
 const isExistingIdea = (idea: any): idea is Idea => {
@@ -50,8 +51,9 @@ const ClassifyIcon = () => (
     </svg>
 );
 
-export const IdeaDetail: React.FC<IdeaDetailProps> = ({ idea, onSave, onPublish, onVote, onUploadIdeas, onDownloadTemplate, hasSavedClusters, onClassify, onGoToList }) => {
+export const IdeaDetail: React.FC<IdeaDetailProps> = ({ idea, onSave, onPublish, onVote, onUploadIdeas, onDownloadTemplate, hasSavedClusters, onClassify, onGoToList, onDelete }) => {
   const [isEditing, setIsEditing] = useState(!isExistingIdea(idea));
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [formData, setFormData] = useState({
     title: idea.title,
     description: idea.description,
@@ -83,6 +85,21 @@ export const IdeaDetail: React.FC<IdeaDetailProps> = ({ idea, onSave, onPublish,
         description: idea.description,
     });
     setIsEditing(false);
+  };
+
+  const handleDelete = async () => {
+    if (!existingIdea || !onDelete) return;
+    
+    try {
+      await onDelete(existingIdea.id);
+      // Only navigate away if delete was successful
+      onGoToList();
+      return true; // Success
+    } catch (error) {
+      // Error is already handled in the parent component
+      console.error('Delete failed:', error);
+      return false; // Failed
+    }
   };
 
   const existingIdea = isExistingIdea(idea) ? idea : null;
@@ -181,29 +198,78 @@ export const IdeaDetail: React.FC<IdeaDetailProps> = ({ idea, onSave, onPublish,
             {existingIdea.isEvaluating && <EvaluationLoadingState />}
             {existingIdea.evaluation && <EvaluationDisplay evaluation={existingIdea.evaluation} />}
             
-            <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700 flex justify-end items-center space-x-4">
-                {canClassify && (
-                <Button onClick={() => onClassify(existingIdea.id)} variant="secondary" disabled={existingIdea.isClassifying}>
-                    {existingIdea.isClassifying ? 'Analyzing...' : <><ClassifyIcon /> Classify with AI</>}
-                </Button>
-                )}
-                {existingIdea.status === IdeaStatus.DRAFT ? (
-                <>
-                    <Button variant="secondary" onClick={() => setIsEditing(true)}>Edit</Button>
-                    <Button variant="success" onClick={onPublish}>
-                    Publish
+            <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <div>
+                    {onDelete && (
+                        <Button 
+                            variant="danger" 
+                            onClick={() => setShowDeleteConfirm(true)}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete Idea
+                        </Button>
+                    )}
+                </div>
+                <div className="flex items-center space-x-4">
+                    {canClassify && (
+                    <Button onClick={() => onClassify(existingIdea.id)} variant="secondary" disabled={existingIdea.isClassifying}>
+                        {existingIdea.isClassifying ? 'Analyzing...' : <><ClassifyIcon /> Classify with AI</>}
                     </Button>
-                </>
-                ) : (
-                <Button onClick={onVote}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                    </svg>
-                    Vote for this Idea
-                </Button>
-                )}
+                    )}
+                    {existingIdea.status === IdeaStatus.DRAFT ? (
+                    <>
+                        <Button variant="secondary" onClick={() => setIsEditing(true)}>Edit</Button>
+                        <Button variant="success" onClick={onPublish}>
+                        Publish
+                        </Button>
+                    </>
+                    ) : (
+                    <Button onClick={onVote}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                        </svg>
+                        Vote for this Idea
+                    </Button>
+                    )}
+                </div>
             </div>
         </Card>
+
+        {/* Delete Confirmation Dialog */}
+        {showDeleteConfirm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-md mx-4">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
+                        Delete Idea
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400 mb-6">
+                        Are you sure you want to delete "{existingIdea.title}"? This action cannot be undone.
+                    </p>
+                    <div className="flex justify-end space-x-4">
+                        <Button 
+                            variant="secondary" 
+                            onClick={() => setShowDeleteConfirm(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            variant="danger" 
+                            onClick={async () => {
+                                const success = await handleDelete();
+                                if (success) {
+                                    setShowDeleteConfirm(false);
+                                }
+                            }}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            Delete
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

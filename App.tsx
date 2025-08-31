@@ -18,7 +18,7 @@ type SortableKeys = SortableIdeaKeys | 'ai_score';
 const ITEMS_PER_PAGE = 10;
 
 const App: React.FC = () => {
-  const { ideas, setIdeas, loading: ideasLoading, error: ideasError, createIdea, updateIdea, voteIdea, publishIdea } = useApiIdeas();
+  const { ideas, setIdeas, loading: ideasLoading, error: ideasError, createIdea, updateIdea, deleteIdea, voteIdea, publishIdea } = useApiIdeas();
   const { criteria: evaluationCriteria, loading: criteriaLoading, error: criteriaError, saveCriteria } = useApiEvaluationCriteria();
   
   const [currentView, setCurrentView] = useState<'list' | 'detail' | 'dashboard' | 'settings'>('dashboard');
@@ -107,6 +107,19 @@ const App: React.FC = () => {
       await voteIdea(selectedIdeaId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to vote');
+    }
+  };
+
+  const handleDeleteIdea = async (ideaId: string) => {
+    try {
+      console.log('Attempting to delete idea:', ideaId);
+      await deleteIdea(ideaId);
+      console.log('Delete successful');
+      setError(null);
+    } catch (err) {
+      console.error('Delete error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete idea');
+      throw err; // Re-throw so IdeaDetail can handle it
     }
   };
 
@@ -488,7 +501,7 @@ const App: React.FC = () => {
         );
       case 'detail':
         if (selectedIdea) {
-          return <IdeaDetail idea={selectedIdea} onSave={handleSaveIdea} onPublish={handlePublishIdea} onVote={handleVote} onUploadIdeas={handleUploadIdeas} onDownloadTemplate={handleDownloadTemplate} hasSavedClusters={hasSavedClusters} onClassify={handleClassifySingleIdea} onGoToList={handleGoToList} />;
+          return <IdeaDetail idea={selectedIdea} onSave={handleSaveIdea} onPublish={handlePublishIdea} onVote={handleVote} onUploadIdeas={handleUploadIdeas} onDownloadTemplate={handleDownloadTemplate} hasSavedClusters={hasSavedClusters} onClassify={handleClassifySingleIdea} onGoToList={handleGoToList} onDelete={handleDeleteIdea} />;
         }
         return <p>Error: Idea not found.</p>;
       case 'settings':
